@@ -1,0 +1,24 @@
+type MemberDraft = record {
+  "principal" : text;
+  description : text;
+  power : nat;
+};
+type MemberObject = record { id : text; power : nat32 };
+type RequestDraft = variant {
+  threshold : ThresholdDraft;
+  removeMember : MemberDraft;
+  addMember : MemberDraft;
+  transfer : TransferDraft;
+};
+type ThresholdDraft = record { description : text; power : nat };
+type TransferDraft = record {
+  recipient : text;
+  description : text;
+  amount : nat;
+};
+service : () -> {
+  createRequest : (RequestDraft) -> (nat32);
+  deleteMember : (text) -> ();
+  fetchMembers : () -> (vec MemberObject) query;
+  getMember : (text) -> (opt MemberObject) query;
+}
