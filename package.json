@@ -11,5 +11,10 @@
   "license": "ISC",
   "dependencies": {
     "azle": "^0.9.0"
+  },
+  "devDependencies": {
+    "@dfinity/agent": "0.11.1",
+    "ts-node": "10.7.0",
+    "typescript": "4.6.3"
   }
 }

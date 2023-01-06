@@ -24,11 +24,6 @@ import {
     Opt
 } from 'azle';
 
-type Result = Variant<{
-    ok:nat32;
-    err:string
-}>;
-
 type Request = Variant<{
     transfer:Transfer;
     addMember:Member;
@@ -90,29 +85,25 @@ type ThresholdDraft = {
     description:string;
 };
 
-var requestId:nat32 = 1;
+type Result = Variant<{
+    ok:nat32;
+    err:string
+}>;
 
-type Db = {
-    members: {
-        [id: string]: MemberObject;
-    };
-    requests: {
-        [id: nat32]: Request;
-    };
-}
+var requestId:nat32 = 1;
 
 type MemberObject = {
     id: string;
     power: nat32;
 };
 
-let db: Db = {
-    members: {},
-    requests: {}
-};
-
 type StableStorage = {
-    db:Db[];
+    members: {
+        [id: string]: MemberObject;
+    };
+    requests: {
+        [id: nat32]: Request;
+    };
 };
 
 let stable_storage: StableStorage = ic.stable_storage();
@@ -133,18 +124,18 @@ export function post_upgrade(): PostUpgrade {
 }
 
 export function getMember(id: string): Query<Opt<MemberObject>> {
-    const member = stable_storage.db.members[id] ?? null;
+    const member = stable_storage.members[id] ?? null;
     return member;
 }
 
-export function fetchMembers(): Query<MemberObject[]> {
+/*export function fetchMembers(): Query<MemberObject[]> {
     return Object.values(stable_storage.db.members);
 }
 
 export function deleteMember(id:string): Update<void> {
     delete db.members[id];
     stable_storage.db = db;
-}
+}*/
 
 //Update Methods
 
@@ -155,9 +146,9 @@ export function createRequest(request:RequestDraft): Update<nat32> {
     };
     let currentId:nat32 = requestId;
     requestId = requestId+1;
-    let _request:Request = _createRequest(currentId, request, caller, isMember.power);
-    db.request[currentId] = _request;
-    stable_storage.db = db;
+    let _request:Request = _createRequest(currentId, request);
+    stable_storage.requests[currentId] = _request;
+    //stable_storage.db = db;
     return currentId;
 }
 
@@ -175,18 +166,18 @@ export function submitRequest(request:Request): Update<boolean> {
 
 //Private Methods
 
-function _createRequest(id:nat32, request : RequestDraft, caller:Principal, power:nat) : Request {
+function _createRequest(id:nat32, request : RequestDraft) : Request {
     if (!transfer(request)) {
-        let value = canister_result.transfer;
+        let value = request.transfer;
         let result = {
             id:id,
-            amount:value.amount,
-            recipient:value.recipient,
+            amount:value?.amount,
+            recipient:value?.recipient,
             approvals:{},
             executed:false,
             createdAt:now(),
             executedAt:null,
-            description:value.description
+            description:value?.description
         };
         return {transfer:result};
     }else if(!addMember(request)){
@@ -233,14 +224,14 @@ function _createRequest(id:nat32, request : RequestDraft, caller:Principal, powe
 }
 
 
-function _addmember(member: Member): Member {
+/*function _addmember(member: Member): Member {
     db.members[member.id] = member;
     stable_storage.db = db;
     return member;
-}
+}*/
 
 function _isMember(id:string): boolean {
-    const member = stable_storage.db.members[id] ?? null;
+    const member = stable_storage.members[id] ?? null;
     if(member != null){
         return true
     }else {

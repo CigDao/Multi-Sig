@@ -18,7 +18,5 @@ type TransferDraft = record {
 };
 service : () -> {
   createRequest : (RequestDraft) -> (nat32);
-  deleteMember : (text) -> ();
-  fetchMembers : () -> (vec MemberObject) query;
   getMember : (text) -> (opt MemberObject) query;
 }
