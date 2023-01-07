@@ -24,7 +24,12 @@ import {
     Opt
 } from 'azle';
 
-type Result = Variant<{
-    ok:nat32;
-    err:string
+export type Result = Variant<{
+    ok: nat32;
+    err: string
 }>;
+
+export type MemberObject = {
+    id: string;
+    power: nat32;
+};

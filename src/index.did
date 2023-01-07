@@ -1,22 +1,61 @@
+type Member = record {
+  id : nat32;
+  "principal" : text;
+  executedAt : opt int;
+  createdAt : int;
+  description : text;
+  executed : bool;
+  power : nat32;
+  approvals : vec MemberObject;
+};
 type MemberDraft = record {
   "principal" : text;
   description : text;
-  power : nat;
+  power : nat32;
 };
 type MemberObject = record { id : text; power : nat32 };
+type Request = variant {
+  threshold : Threshold;
+  removeMember : Member;
+  addMember : Member;
+  transfer : Transfer;
+};
 type RequestDraft = variant {
   threshold : ThresholdDraft;
   removeMember : MemberDraft;
   addMember : MemberDraft;
   transfer : TransferDraft;
 };
-type ThresholdDraft = record { description : text; power : nat };
+type Threshold = record {
+  id : nat32;
+  executedAt : opt int;
+  createdAt : int;
+  description : text;
+  executed : bool;
+  power : nat32;
+  approvals : vec MemberObject;
+};
+type ThresholdDraft = record { description : text; power : nat32 };
+type Transfer = record {
+  id : nat32;
+  executedAt : opt int;
+  createdAt : int;
+  recipient : text;
+  description : text;
+  executed : bool;
+  amount : nat;
+  approvals : vec MemberObject;
+};
 type TransferDraft = record {
   recipient : text;
   description : text;
   amount : nat;
 };
-service : () -> {
+service : (text) -> {
+  approveRequest : (text) -> (bool);
   createRequest : (RequestDraft) -> (nat32);
+  fetchMembers : () -> (vec MemberObject) query;
   getMember : (text) -> (opt MemberObject) query;
+  getRequest : (text) -> (opt Request) query;
+  submitRequest : (Request) -> (bool);
 }
