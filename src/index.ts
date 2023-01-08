@@ -41,12 +41,12 @@ type StableStorage = {
 
 let stable_storage: StableStorage = ic.stable_storage();
 
-export function init(value:string): Init {
+export function init(_member:string,token:string): Init {
     console.log('This runs once when the canister is first initialized');
     stable_storage.members = {}
     stable_storage.requests = {}
     let member = {
-        id:value,
+        id:_member,
         power:threshold
     }
     _addmember(member);
