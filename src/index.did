@@ -1,3 +1,15 @@
+type AzleInline7633226338283948197 = variant {
+  InsufficientAllowance;
+  InsufficientBalance;
+  ErrorOperationStyle;
+  Unauthorized;
+  LedgerTrap;
+  ErrorTo;
+  Other : text;
+  BlockUsed;
+  AmountTooSmall;
+};
+type ManualReply = variant { Ok : nat; Err : AzleInline7633226338283948197 };
 type Member = record {
   id : nat32;
   "principal" : text;
@@ -51,11 +63,14 @@ type TransferDraft = record {
   description : text;
   amount : nat;
 };
-service : (text) -> {
-  approveRequest : (text) -> (bool);
+service : (text, text) -> {
+  approveRequest : (nat32) -> (bool);
   createRequest : (RequestDraft) -> (nat32);
   fetchMembers : () -> (vec MemberObject) query;
   getMember : (text) -> (opt MemberObject) query;
-  getRequest : (text) -> (opt Request) query;
-  submitRequest : (Request) -> (bool);
+  getRequest : (nat32) -> (opt Request) query;
+  getRequestId : () -> (nat32) query;
+  getThreshold : () -> (nat32) query;
+  getToken : () -> (text) query;
+  submitRequest : (nat32) -> (ManualReply);
 }

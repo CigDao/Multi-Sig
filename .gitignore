@@ -16,3 +16,4 @@
 # frontend code
 node_modules/
 target/
+canister_ids.json

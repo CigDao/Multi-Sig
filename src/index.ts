@@ -21,14 +21,13 @@ import {
     float32,
     Principal,
     Variant,
-    Opt
+    Opt,
+    CanisterResult
 } from 'azle';
 
 import { RequestDraft, Request } from "./models/request"
 import { MemberObject, Result } from "./models/common"
-
-var threshold:nat32 = 1
-var requestId:nat32 = 1;
+import { Dip20, TxReceipt, Dip20Result } from "./models/dip20"
 
 type StableStorage = {
     members: {
@@ -37,17 +36,23 @@ type StableStorage = {
     requests: {
         [id: nat32]: Request;
     };
+    tokenCanister:string;
+    threshold: nat32;
+    requestId: nat32;
 };
 
 let stable_storage: StableStorage = ic.stable_storage();
 
-export function init(_member:string,token:string): Init {
+export function init(_member: string, token: string): Init {
     console.log('This runs once when the canister is first initialized');
     stable_storage.members = {}
     stable_storage.requests = {}
+    stable_storage.tokenCanister = token
+    stable_storage.threshold = 1
+    stable_storage.requestId = 1
     let member = {
-        id:_member,
-        power:threshold
+        id: _member,
+        power: stable_storage.threshold
     }
     _addmember(member);
 }
@@ -61,12 +66,25 @@ export function post_upgrade(): PostUpgrade {
 }
 
 //Query Methods
+
+export function getToken(): Query<string> {
+    return stable_storage.tokenCanister;
+}
+
+export function getThreshold(): Query<nat32> {
+    return stable_storage.threshold;
+}
+
+export function getRequestId(): Query<nat32> {
+    return stable_storage.requestId;
+}
+
 export function getMember(id: string): Query<Opt<MemberObject>> {
     const member = stable_storage.members[id] ?? null;
     return member;
 }
 
-export function getRequest(id: string): Query<Opt<Request>> {
+export function getRequest(id: nat32): Query<Opt<Request>> {
     const request = stable_storage.requests[id] ?? null;
     return request;
 }
@@ -78,27 +96,26 @@ export function fetchMembers(): Query<MemberObject[]> {
 //Update Methods
 export function createRequest(request: RequestDraft): Update<nat32> {
     let caller = ic.caller();
-    if(!_isMember(caller.toText())){
+    if (!_isMember(caller.toText())) {
         throw Error('not Authorized');
     };
-    let currentId: nat32 = requestId;
-    requestId = requestId + 1;
+    let currentId: nat32 = stable_storage.requestId;
+    stable_storage.requestId = stable_storage.requestId + 1;
     let _request: Request = _createRequest(currentId, request);
     stable_storage.requests[currentId] = _request;
     return currentId;
 }
 
-export function approveRequest(id: string): Update<boolean> {
+export function approveRequest(id: nat32): Update<boolean> {
     let caller = ic.caller();
     if (!_isMember(caller.toText())) {
         throw Error('Not Authorized');
     };
     const request = stable_storage.requests[id] ?? null;
     const member = stable_storage.members[caller.toText()] ?? null;
-    if (request) {
+    if (request != null) {
         if (member) {
-            let _request = _approveRequest(member, request)
-            stable_storage.requests[id] = _request
+            stable_storage.requests[id] = _approveRequest(member, request)
         } else {
             throw Error('Not Authorized');
         }
@@ -108,49 +125,53 @@ export function approveRequest(id: string): Update<boolean> {
     return true;
 }
 
-export function submitRequest(request: Request): Update<boolean> {
+export async function submitRequest(id: nat32): Promise<Update<TxReceipt>> {
     let caller = ic.caller();
-    if(!_isMember(caller.toText())){
-        throw Error('not Authorized');
+    if (!_isMember(caller.toText())) {
+        throw Error('Not Authorized');
+    };
+    const request = stable_storage.requests[id] ?? null;
+    if(!request){
+        throw Error('Invalid Request');
     };
     if (request.transfer) {
         let result = request.transfer
         let check = _thresholdCheck(request)
-        if(check){
-            return true
-        }else{
-            return false
+        if (check) {
+            return await _transfer(Principal.fromText(result.recipient), result.amount)
+        } else {
+            return { Err: {Unauthorized:null} }
         }
     } else if (request.addMember) {
         let result = request.addMember
         let check = _thresholdCheck(request)
-        if(check){
+        if (check) {
             let _member = {
                 id: result.principal,
                 power: result.power
             };
             _addmember(_member)
-            return true
-        }else{
-            return false
+            return { Ok: BigInt(0) }
+        } else {
+            return { Err: {Unauthorized:null} }
         }
     } else if (request.removeMember) {
         let result = request.removeMember
         let check = _thresholdCheck(request)
-        if(check){
+        if (check) {
             _removeMember(result.principal)
-            return true
-        }else{
-            return false
+            return { Ok: BigInt(0) }
+        } else {
+            return { Err: {Unauthorized:null} }
         }
     } else if (request.threshold) {
         let result = request.threshold
         let check = _thresholdCheck(request)
-        if(check){
+        if (check) {
             _setThreshold(result.power)
-            return true
-        }else{
-            return false
+            return { Ok: BigInt(0) }
+        } else {
+            return { Err: {Unauthorized:null} }
         }
     } else {
         throw Error('Invalid Request Type');
@@ -218,19 +239,31 @@ function _createRequest(id: nat32, request: RequestDraft): Request {
 function _approveRequest(member: MemberObject, request: Request): Request {
     if (request.transfer) {
         let result = request.transfer
-        result.approvals[member.id] = member
+        let exist = result.approvals.includes(member)
+        if(!exist){
+            result.approvals.push(member)
+        }
         return { transfer: result };
     } else if (request.addMember) {
         let result = request.addMember
-        result.approvals[member.id] = member
+        let exist = result.approvals.includes(member)
+        if(!exist){
+            result.approvals.push(member)
+        }
         return { addMember: result };
     } else if (request.removeMember) {
         let result = request.removeMember
-        result.approvals[member.id] = member
+        let exist = result.approvals.includes(member)
+        if(!exist){
+            result.approvals.push(member)
+        }
         return { removeMember: result };
     } else if (request.threshold) {
         let result = request.threshold
-        result.approvals[member.id] = member
+        let exist = result.approvals.includes(member)
+        if(!exist){
+            result.approvals.push(member)
+        }
         return { threshold: result };
     } else {
         throw Error('Invalid Request Type');
@@ -259,8 +292,21 @@ function _removeMember(id) {
     delete stable_storage.members[id]
 }
 
-function _setThreshold(_threshold:nat32) {
-    threshold = _threshold;
+function _setThreshold(_threshold: nat32) {
+    stable_storage.threshold = _threshold;
+}
+
+async function _transfer(to: Principal, value: nat): Promise<TxReceipt> {
+    let dip20 = ic.canisters.Dip20<Dip20>(
+        Principal.fromText(stable_storage.tokenCanister)
+    );
+    let result = await dip20.transfer(to, value).call();
+
+    if(result.ok){
+        return result.ok
+    }else{
+        return {Err:{Other:result.err}}
+    }
 }
 
 function _thresholdCheck(request: Request): boolean {
@@ -270,7 +316,7 @@ function _thresholdCheck(request: Request): boolean {
         result.approvals.forEach((value) => {
             power = power + value.power
         });
-        
+
     } else if (request.addMember) {
         let result = request.addMember
         result.approvals.forEach((value) => {
@@ -289,7 +335,7 @@ function _thresholdCheck(request: Request): boolean {
     } else {
         throw Error('Invalid Request Type');
     }
-    if (power >= threshold) {
+    if (power >= stable_storage.threshold) {
         return true;
     } else {
         return false;
